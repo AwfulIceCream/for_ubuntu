@@ -1,57 +1,61 @@
-﻿#include <windows.h>
 #include <iostream>
 #include <string>
-#include <psapi.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/resource.h>
+#include <signal.h>
 
 using namespace std;
 
-void MonitorProcessMemoryUsage(DWORD processId, SIZE_T maxWorkingSetSize)
+void MonitorProcessMemoryUsage(pid_t processId, rlim_t maxWorkingSetSize)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processId);
-	if (hProcess == NULL)
-	{
-		cout << "Failed to open process (" << GetLastError() << ")." << endl;
-		return;
-	}
+    while (true)
+    {
+        usleep(5000000); // Sleep for 5 seconds (in microseconds)
 
-	while (true)
-	{
-		Sleep(5000);
+        struct rusage usage;
+        getrusage(RUSAGE_CHILDREN, &usage);
+        rlim_t workingSetSize = usage.ru_maxrss * 1024; // Convert to bytes
 
-		PROCESS_MEMORY_COUNTERS pmc;
-		if (GetProcessMemoryInfo(hProcess, &pmc, sizeof(pmc)))
-		{
-			SIZE_T workingSetSize = pmc.WorkingSetSize;
-
-			if (workingSetSize > maxWorkingSetSize)
-			{
-				cout << "Memory limit exceeded. Terminating process." << endl;
-				TerminateProcess(hProcess, 1);
-				CloseHandle(hProcess);
-				break;
-			}
-			else
-			{
-				cout << "Memory usage is within limits." << endl;
-			}
-		}
-
-		Sleep(1000);
-	}
+        if (workingSetSize > maxWorkingSetSize)
+        {
+            cout << "Memory limit exceeded. Terminating process." << endl;
+            kill(processId, SIGKILL); // Terminate the process
+            break;
+        }
+        else
+        {
+            cout << "Memory usage is within limits." << endl;
+        }
+    }
 }
 
 int main()
 {
-	DWORD processId;
-	SIZE_T maxWorkingSetSize;
+    pid_t processId;
+    rlim_t maxWorkingSetSize;
 
-	cout << "Enter the Process ID to monitor: ";
-	cin >> processId;
+    cout << "Enter the Process ID to monitor: ";
+    cin >> processId;
 
-	cout << "Enter the maximum working set size (in bytes): ";
-	cin >> maxWorkingSetSize;
+    cout << "Enter the maximum working set size (in bytes, 0 for unlimited): ";
+    cin >> maxWorkingSetSize;
 
-	MonitorProcessMemoryUsage(processId, maxWorkingSetSize);
+    if (maxWorkingSetSize > 0)
+    {
+        struct rlimit limit;
+        limit.rlim_cur = maxWorkingSetSize;
+        limit.rlim_max = maxWorkingSetSize;
+        
+        if (setrlimit(RLIMIT_AS, &limit) != 0)
+        {
+            perror("Failed to set memory limit");
+            return 1;
+        }
+    }
 
-	return 0;
+    MonitorProcessMemoryUsage(processId, maxWorkingSetSize);
+
+    return 0;
 }
