@@ -1,61 +1,61 @@
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/resource.h>
 #include <signal.h>
 
-using namespace std;
+// Function to get the memory usage of a process by its PID
+long getProcessMemoryUsage(int pid) {
+    std::ifstream statm;
+    std::string statm_path = "/proc/" + std::to_string(pid) + "/statm";
+    statm.open(statm_path.c_str());
 
-void MonitorProcessMemoryUsage(pid_t processId, rlim_t maxWorkingSetSize)
-{
-    while (true)
-    {
-        usleep(5000000); // Sleep for 5 seconds (in microseconds)
-
-        struct rusage usage;
-        getrusage(RUSAGE_CHILDREN, &usage);
-        rlim_t workingSetSize = usage.ru_maxrss * 1024; // Convert to bytes
-
-        if (workingSetSize > maxWorkingSetSize)
-        {
-            cout << "Memory limit exceeded. Terminating process." << endl;
-            kill(processId, SIGKILL); // Terminate the process
-            break;
-        }
-        else
-        {
-            cout << "Memory usage is within limits." << endl;
-        }
+    if (!statm) {
+        std::cerr << "Error: Unable to open " << statm_path << std::endl;
+        return -1;
     }
+
+    long size;
+    statm >> size;
+    statm.close();
+    return size;
 }
 
-int main()
-{
-    pid_t processId;
-    rlim_t maxWorkingSetSize;
-
-    cout << "Enter the Process ID to monitor: ";
-    cin >> processId;
-
-    cout << "Enter the maximum working set size (in bytes, 0 for unlimited): ";
-    cin >> maxWorkingSetSize;
-
-    if (maxWorkingSetSize > 0)
-    {
-        struct rlimit limit;
-        limit.rlim_cur = maxWorkingSetSize;
-        limit.rlim_max = maxWorkingSetSize;
-        
-        if (setrlimit(RLIMIT_AS, &limit) != 0)
-        {
-            perror("Failed to set memory limit");
-            return 1;
-        }
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        std::cerr << "Usage: " << argv[0] << " <PID> <memory_limit_in_kb>" << std::endl;
+        return 1;
     }
 
-    MonitorProcessMemoryUsage(processId, maxWorkingSetSize);
+    int pid = std::stoi(argv[1]);
+    long limit_kb = std::stol(argv[2]);
+
+    if (pid <= 0 || limit_kb < 0) {
+        std::cerr << "Invalid PID or memory limit." << std::endl;
+        return 1;
+    }
+
+    while (true) {
+        long memory_usage_kb = getProcessMemoryUsage(pid);
+
+        if (memory_usage_kb == -1) {
+            std::cerr << "Process with PID " << pid << " not found." << std::endl;
+            return 1;
+        }
+
+        std::cout << "Process " << pid << " memory usage: " << memory_usage_kb << " KB" << std::endl;
+
+        if (memory_usage_kb > limit_kb) {
+            std::cout << "Process " << pid << " exceeded the memory limit of " << limit_kb << " KB. Terminating..." << std::endl;
+            kill(pid, SIGKILL); // Send SIGKILL to terminate the process forcefully
+            return 0;
+        }
+
+        usleep(1000000); // Sleep for 1 second (adjust as needed)
+    }
 
     return 0;
 }
+
+//g++ monitor_memory.cpp -o monitor_memory
+//./monitor_memory <PID> <memory_limit_in_kb>
