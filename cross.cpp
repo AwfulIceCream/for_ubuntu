@@ -27,9 +27,9 @@ void monitorMemory(pid_t pid, rlim_t maxMemoryBytes)
     {
         std::this_thread::sleep_for(std::chrono::seconds(5));
         struct rusage usage;
-        getrusage(RUSAGE_SELF, &usage); // Use RUSAGE_SELF to monitor the current process
+        getrusage(RUSAGE_SELF, &usage);
         rlim_t memoryUsage = usage.ru_maxrss * 1024;
-        
+
         if (memoryUsage > maxMemoryBytes)
         {
             cout << "Memory limit exceeded. Terminating process." << endl;
@@ -100,7 +100,7 @@ int main()
 {
 #if defined(__linux__)
     pid_t processId;
-    rlim_t maxMemoryBytesLinux; // Separate variable for Linux
+    rlim_t maxMemoryBytesLinux;
 
     cout << "Enter the Process ID to monitor: ";
     cin >> processId;
@@ -119,11 +119,11 @@ int main()
 #endif
 
 #if defined(__linux__) || defined(_WIN32)
-    #if defined(__linux__)
+#if defined(__linux__)
     monitorMemory(processId, maxMemoryBytesLinux);
-    #elif defined(_WIN32)
+#elif defined(_WIN32)
     monitorMemory(processId, maxMemoryBytesWindows);
-    #endif
+#endif
 #else
     cerr << "Unsupported platform." << endl;
 #endif
