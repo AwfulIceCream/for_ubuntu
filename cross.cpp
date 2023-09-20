@@ -144,3 +144,11 @@ int main()
 
     return 0;
 }
+/*cross.cpp: In function ‘int main()’:
+cross.cpp:137:5: error: ‘SIZE_T’ was not declared in this scope
+  137 |     SIZE_T maxMemoryBytes;
+      |     ^~~~~~
+cross.cpp:139:12: error: ‘maxMemoryBytes’ was not declared in this scope
+  139 |     cin >> maxMemoryBytes;
+      |            ^~~~~~~~~~~~~~
+*/
