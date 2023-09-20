@@ -119,36 +119,34 @@ int main()
 {
 #if defined(__linux__)
     pid_t processId;
-    rlim_t maxWorkingSetSize;
+    rlim_t maxMemoryBytesLinux; // Separate variable for Linux
 
     cout << "Enter the Process ID to monitor: ";
     cin >> processId;
 
-    cout << "Enter the maximum working set size (in bytes): ";
-    cin >> maxWorkingSetSize;
-
+    cout << "Enter the maximum memory usage for Linux (in bytes): ";
+    cin >> maxMemoryBytesLinux;
 #elif defined(_WIN32)
     DWORD processId;
+    SIZE_T maxMemoryBytesWindows; // Separate variable for Windows
+
     cout << "Enter the Process ID to monitor: ";
     cin >> processId;
+
+    cout << "Enter the maximum memory usage for Windows (in bytes): ";
+    cin >> maxMemoryBytesWindows;
 #endif
 
 #if defined(__linux__) || defined(_WIN32)
-    SIZE_T maxMemoryBytes;
-    cout << "Enter the maximum memory usage (in bytes): ";
-    cin >> maxMemoryBytes;
-    monitorMemory(processId, maxMemoryBytes);
+    // Use the appropriate maxMemoryBytes variable for the platform
+    #if defined(__linux__)
+    monitorMemory(processId, maxMemoryBytesLinux);
+    #elif defined(_WIN32)
+    monitorMemory(processId, maxMemoryBytesWindows);
+    #endif
 #else
     cerr << "Unsupported platform." << endl;
 #endif
 
     return 0;
 }
-/*cross.cpp: In function ‘int main()’:
-cross.cpp:137:5: error: ‘SIZE_T’ was not declared in this scope
-  137 |     SIZE_T maxMemoryBytes;
-      |     ^~~~~~
-cross.cpp:139:12: error: ‘maxMemoryBytes’ was not declared in this scope
-  139 |     cin >> maxMemoryBytes;
-      |            ^~~~~~~~~~~~~~
-*/
