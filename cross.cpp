@@ -140,3 +140,20 @@ int main()
 
 	return 0;
 }
+/*In function ‘rlim_t GetProcessMemoryUsageLinux(pid_t)’:
+cross.cpp:22:29: error: variable ‘std::ifstream statusFile’ has initializer but incomplete type
+   22 |         ifstream statusFile(filename.c_str());
+      |                             ^~~~~~~~
+cross.cpp: In function ‘void monitorMemory(pid_t, rlim_t)’:
+cross.cpp:46:38: error: ‘getProcessMemoryUsageLinux’ was not declared in this scope; did you mean ‘GetProcessMemoryUsageLinux’?
+   46 |                 rlim_t memoryUsage = getProcessMemoryUsageLinux(pid);
+      |                                      ^~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                      GetProcessMemoryUsageLinux
+cross.cpp: In function ‘int main()’:
+cross.cpp:133:16: error: redeclaration of ‘rlim_t maxWorkingSetSize’
+  133 |         rlim_t maxWorkingSetSize = 1000000000;
+      |                ^~~~~~~~~~~~~~~~~
+cross.cpp:118:16: note: ‘rlim_t maxWorkingSetSize’ previously declared here
+  118 |         rlim_t maxWorkingSetSize;
+      |                ^~~~~~~~~~~~~~~~~
+*/
