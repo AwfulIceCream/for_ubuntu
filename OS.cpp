@@ -1,61 +1,117 @@
 #include <iostream>
+#include <thread>
+#include <chrono>
 #include <fstream>
 #include <string>
+
+#if defined(__linux__)
 #include <unistd.h>
+#include <sys/resource.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <signal.h>
+#endif
 
-// Function to get the memory usage of a process by its PID
-long getProcessMemoryUsage(int pid) {
-    std::ifstream statm;
-    std::string statm_path = "/proc/" + std::to_string(pid) + "/statm";
-    statm.open(statm_path.c_str());
+#if defined(_WIN32)
+#include <windows.h>
+#include <psapi.h>
+#endif
 
-    if (!statm) {
-        std::cerr << "Error: Unable to open " << statm_path << std::endl;
-        return -1;
+using namespace std;
+
+#if defined(__linux__)
+
+void monitorMemory(pid_t pid, rlim_t maxMemoryBytes)
+{
+    while (true)
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        struct rusage usage;
+        getrusage(RUSAGE_SELF, &usage);
+        rlim_t memoryUsage = usage.ru_maxrss * 1024;
+
+        if (memoryUsage > maxMemoryBytes)
+        {
+            cout << "Memory limit exceeded. Terminating process." << endl;
+            kill(pid, SIGKILL);
+            break;
+        }
+        else
+        {
+            cout << "Memory usage is within limits." << endl;
+        }
     }
-
-    long size;
-    statm >> size;
-    statm.close();
-    return size;
 }
+#endif
 
-int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " <PID> <memory_limit_in_kb>" << std::endl;
-        return 1;
+#if defined(_WIN32)
+SIZE_T getProcessMemoryUsageWindows(DWORD pid)
+{
+    HANDLE processHandle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+    if (processHandle == nullptr)
+    {
+        cerr << "Failed to open process. Error code: " << GetLastError() << endl;
+        return 0;
     }
 
-    int pid = std::stoi(argv[1]);
-    long limit_kb = std::stol(argv[2]);
-
-    if (pid <= 0 || limit_kb < 0) {
-        std::cerr << "Invalid PID or memory limit." << std::endl;
-        return 1;
+    PROCESS_MEMORY_COUNTERS pmc;
+    if (GetProcessMemoryInfo(processHandle, &pmc, sizeof(pmc)))
+    {
+        CloseHandle(processHandle);
+        return pmc.WorkingSetSize;
     }
 
-    while (true) {
-        long memory_usage_kb = getProcessMemoryUsage(pid);
-
-        if (memory_usage_kb == -1) {
-            std::cerr << "Process with PID " << pid << " not found." << std::endl;
-            return 1;
-        }
-
-        std::cout << "Process " << pid << " memory usage: " << memory_usage_kb << " KB" << std::endl;
-
-        if (memory_usage_kb > limit_kb) {
-            std::cout << "Process " << pid << " exceeded the memory limit of " << limit_kb << " KB. Terminating..." << std::endl;
-            kill(pid, SIGKILL); // Send SIGKILL to terminate the process forcefully
-            return 0;
-        }
-
-        usleep(1000000); // Sleep for 1 second (adjust as needed)
-    }
-
+    CloseHandle(processHandle);
+    cerr << "Failed to get process memory info. Error code: " << GetLastError() << endl;
     return 0;
 }
 
-//g++ monitor_memory.cpp -o monitor_memory
-//./monitor_memory <PID> <memory_limit_in_kb>
+void monitorMemory(DWORD pid, SIZE_T maxMemoryBytes)
+{
+    while (true)
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        SIZE_T memoryUsage = getProcessMemoryUsageWindows(pid);
+
+        if (memoryUsage > maxMemoryBytes)
+        {
+            cout << "Memory limit exceeded. Terminating process." << endl;
+            HANDLE processHandle = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+            if (processHandle != nullptr)
+            {
+                TerminateProcess(processHandle, 1);
+                CloseHandle(processHandle);
+            }
+            else
+            {
+                cerr << "Failed to terminate process. Error code: " << GetLastError() << endl;
+            }
+            break;
+        }
+        else
+        {
+            cout << "Memory usage is within limits." << endl;
+        }
+    }
+}
+#endif
+
+int main()
+{
+    int processId;
+    int maxMemoryBytes;
+
+    cout << "Enter the Process ID to monitor: ";
+    cin >> processId;
+
+    cout << "Enter the maximum memory usage for this process (in bytes): ";
+    cin >> maxMemoryBytes;
+
+#if defined(__linux__) || defined(_WIN32)
+    monitorMemory(processId, maxMemoryBytes);
+#else
+    cerr << "Unsupported platform." << endl;
+#endif
+
+    return 0;
+}
