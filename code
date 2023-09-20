@@ -1,40 +1,121 @@
 #include <iostream>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/resource.h>
-#include <signal.h>
+#include <string>
+#include <chrono>
+#include <thread>
 
 using namespace std;
 
-void MonitorProcessMemoryUsage(pid_t processId, rlim_t maxWorkingSetSize) {
-    while (true) {
-        usleep(5000000); // Sleep for 5 seconds (in microseconds)
+int GetProcessPID(const std::string& processName) {
+    std::string command = "pgrep " + processName;
+    FILE* pipe = popen(command.c_str(), "r");
 
-        struct rusage usage;
-        getrusage(RUSAGE_SELF, &usage); // Use RUSAGE_SELF to monitor the current process
-        rlim_t workingSetSize = usage.ru_maxrss * 1024; // Convert to bytes
+    if (!pipe) {
+        return 0;
+    }
 
-        if (workingSetSize > maxWorkingSetSize) {
-            cout << "Memory limit exceeded. Terminating process." << endl;
-            kill(processId, SIGKILL); // Terminate the process
-            break;
-        } else {
-            cout << "Memory usage is within limits." << endl;
+    char buffer[128];
+    std::string result = "";
+    while (!feof(pipe)) {
+        if (fgets(buffer, 128, pipe) != nullptr) {
+            result += buffer;
         }
     }
+    pclose(pipe);
+
+    if (!result.empty()) {
+        return std::stoi(result);
+    }
+    return 0;
+}
+
+
+void KillProcessByID(int processID) {
+    std::string command = "kill " + std::to_string(processID);
+    system(command.c_str());
+}
+
+size_t GetProcessMemoryUsage(int processID) {
+    std::string command = "pmap " + std::to_string(processID) + " | grep total";
+    FILE* pipe = popen(command.c_str(), "r");
+
+    if (!pipe) {
+        return 0;
+    }
+
+    char buffer[128];
+    std::string result = "";
+    while (!feof(pipe)) {
+        if (fgets(buffer, 128, pipe) != nullptr) {
+            result += buffer;
+        }
+    }
+    pclose(pipe);
+
+    size_t memoryUsage = 0;
+    if (!result.empty()) {
+        size_t pos = result.find("total");
+        if (pos != std::string::npos) {
+            // Знайдено "total", шукати числове значення після нього
+            pos = result.find_first_of("0123456789", pos);
+            if (pos != std::string::npos) {
+                // Знайдено перший символ числа
+                size_t endPos = result.find_first_not_of("0123456789", pos);
+                if (endPos != std::string::npos) {
+                    // Знайдено останній символ числа
+                    std::string memoryValue = result.substr(pos, endPos - pos);
+                    memoryUsage = std::stoull(memoryValue); // Перетворення на ціле число
+                }
+            }
+        }
+    }
+
+    return memoryUsage;
 }
 
 int main() {
-    pid_t processId;
-    rlim_t maxWorkingSetSize;
+    string processName;
+    int processPID = 0;
 
-    cout << "Enter the Process ID to monitor: ";
-    cin >> processId;
+    cout << "Welcome to the process control program on your computer." << endl;
+    cout << "1 - Start monitoring." << endl;
+    cout << "2 - Exit." << endl;
 
-    cout << "Enter the maximum working set size (in bytes): ";
-    cin >> maxWorkingSetSize;
+    int number;
+    cin >> number;
 
-    MonitorProcessMemoryUsage(processId, maxWorkingSetSize);
+    if (number == 1) {
+        cout << "Enter the process name: ";
+        cin >> processName;
+
+        processPID = GetProcessPID(processName);
+
+        if (processPID) {
+            cout << "PID: " << processPID << endl;
+
+            long long limit = 0;
+            size_t memoryUsage = GetProcessMemoryUsage(processPID);
+
+            cout << "Enter the memory usage limit (bytes):" << endl;
+            cin >> limit;
+
+            while (true) {
+                if (memoryUsage > static_cast<size_t>(limit)) {
+                    cout << "Process memory usage exceeds the limit. Terminating the process..." << endl;
+                    KillProcessByID(processPID);
+                    break;
+                } else {
+                    cout << "Process memory usage within the limit." << endl;
+                }
+                this_thread::sleep_for(chrono::seconds(3));
+            }
+        } else {
+            cout << "Process with name \"" << processName << "\" not found." << endl;
+        }
+    } else if (number == 2) {
+        return 0;
+    } else {
+        cout << "You entered an incorrect number." << endl;
+    
 
     return 0;
 }
